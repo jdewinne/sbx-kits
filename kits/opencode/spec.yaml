@@ -1,0 +1,22 @@
+schemaVersion: "2"
+kind: mixin
+name: opencode-helicone
+displayName: "OpenCode + Helicone session plugin"
+description: >
+  Adds the opencode-helicone-session plugin via OpenCode's OPENCODE_CONFIG
+  side file, so it doesn't compete with the sandbox-managed opencode.json.
+
+requires:
+  agent: opencode
+
+environment:
+  variables:
+    OPENCODE_CONFIG: /home/agent/.config/opencode/helicone.json
+
+permissions:
+  network:
+    allow:
+      # opencode installs this plugin from npm at startup; packument and
+      # tarball both come from this host.
+      - registry.npmjs.org
+      - opencode.ai
