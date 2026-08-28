@@ -1,0 +1,10 @@
+schemaVersion: "2"
+kind: sandbox
+name: claude-auto
+displayName: Claude Code (auto mode)
+description: Claude Code in auto permission mode
+
+extends: claude
+
+sandbox:
+  entrypoint: [claude, "--permission-mode", "auto"]
