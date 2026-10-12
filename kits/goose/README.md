@@ -73,6 +73,11 @@ attestations, which this recipe does not verify.
 
 ## Build and verify
 
+`sbx kit validate` and `sbx kit pack` target v2 kits. On a v3 source kit, `validate` fails with
+"this load path has no kit builder configured". Source-form v3 builds run in the
+`sbx-kit-builder` sandbox, which `sbx kit inspect ./kits/goose` and `sbx run ./kits/goose .`
+create on first use (`sbx kit builder status` shows it). To validate without `sbx`:
+
 ```sh
 cd kits/goose
 docker buildx build . -f goose.yaml --output type=cacheonly        # validates the descriptor
