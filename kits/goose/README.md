@@ -8,7 +8,6 @@ so the kit ships the whole environment (the `shell-docker` template plus the goo
 goose/
   goose.yaml          descriptor (first line: # syntax=docker/sandbox-kit:3)
   goose.dockerfile    content recipe, found by filename stem
-  goose-context.md    guidance written to goose's global ~/.config/goose/.goosehints
 ```
 
 ## Run it
@@ -50,7 +49,9 @@ boundary, the same posture the other agent kits take. Use `mode=approve` or
   once, only when `MCP_GATEWAY_URL` is set.
 - **Sessions**: `goose run --text=…` for headless prompts, `goose session --resume` for
   continue and resume, and a `list` built from `goose session list --format json`.
-- **Skills and context**: skills at `~/.agents/skills`, guidance in `~/.config/goose/.goosehints`.
+- **Skills and context**: skills at `~/.agents/skills`. Guidance is a lifecycle file at
+  `~/.config/goose/.goosehints`, not `agent-context@1`: that capability's `directory` field
+  is rejected by the v3 reader in `sbx` 0.47 ("unknown field `directory`").
 
 ## Updating goose
 
