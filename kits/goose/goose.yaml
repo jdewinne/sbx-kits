@@ -42,6 +42,13 @@ args:
     default: auto
     enum: [auto, approve, smart_approve, chat]
     description: goose permission mode (GOOSE_MODE). The sandbox is the boundary, so the default is auto.
+  # Only read with provider=chatgpt_codex over a ChatGPT OAuth login. goose
+  # normally reads this from the id_token claims; the sandbox only holds
+  # sentinels, so it can't. Optional: empty omits the chatgpt-account-id header.
+  chatgptAccountId:
+    default: ""
+    pattern: '^[A-Za-z0-9-]*$'
+    description: ChatGPT account id (the account_id in the host's ~/.codex/auth.json) for provider=chatgpt_codex; empty omits it
 
 provides: ["goose@${{ kit.args.version }}"]
 
@@ -61,6 +68,8 @@ capabilities:
         allow:
           - api.anthropic.com:443
           - api.openai.com:443
+          - auth.openai.com:443
+          - chatgpt.com:443
           - generativelanguage.googleapis.com:443
           - openrouter.ai:443
           - github.com:443
@@ -91,7 +100,7 @@ capabilities:
           - {domain: api.anthropic.com, header: x-api-key, format: "%s"}
   - type: com.docker.sandbox/credential@1
     optional: true
-    description: OpenAI API access
+    description: OpenAI API access (API key or ChatGPT OAuth)
     config:
       service: openai
       phase: runtime
@@ -100,6 +109,18 @@ capabilities:
         proxyManaged: true
         inject:
           - {domain: api.openai.com, header: Authorization, format: "Bearer %s"}
+      # `sbx secret set -g openai --oauth` binds a ChatGPT login instead of a
+      # key. goose's chatgpt_codex provider then calls
+      # chatgpt.com/backend-api/codex with the sentinel bearer it reads from
+      # tokens.json (seeded below), and resourceHosts makes the proxy swap in
+      # the real token there. Same shape as the codex kit.
+      oauth:
+        tokenEndpoint: {host: auth.openai.com, path: /oauth/token}
+        resourceHosts:
+          - chatgpt.com
+        sentinels:
+          accessToken: oai-oat01-proxy-managed
+          refreshToken: oai-ort01-proxy-managed
   - type: com.docker.sandbox/credential@1
     optional: true
     description: Google Gemini API access
@@ -146,6 +167,26 @@ capabilities:
             EOF
           user: agent
           description: Seed goose config.yaml from the provider, model and mode args
+        # With a ChatGPT OAuth login bound, seed the token file goose's
+        # chatgpt_codex provider reads, holding only the proxy sentinels. The
+        # far-future expires_at keeps goose from refreshing: a refresh would go
+        # to auth.openai.com with the sentinel refresh token, and the proxy
+        # already owns the real one. Rewritten every create, so it stays in
+        # step with the bound login.
+        - command: |
+            set -e
+            [ "${SBX_CRED_OPENAI_MODE:-none}" = oauth ] || exit 0
+            dir="$HOME/.config/goose/chatgpt_codex"
+            mkdir -p "$dir"
+            acct='${{ kit.args.chatgptAccountId }}'
+            if [ -n "$acct" ]; then acct="\"$acct\""; else acct=null; fi
+            umask 077
+            cat > "$dir/tokens.json" <<EOF
+            {"access_token":"oai-oat01-proxy-managed","refresh_token":"oai-ort01-proxy-managed","id_token":null,"expires_at":"2099-01-01T00:00:00Z","account_id":$acct}
+            EOF
+          user: agent
+          env: [SBX_CRED_OPENAI_MODE]
+          description: Seed the goose ChatGPT token file with proxy sentinels when OAuth is bound
       startup:
         # Gateway-first MCP registration as a streamable_http extension.
         # goose rewrites this file in block style and adds its own platform

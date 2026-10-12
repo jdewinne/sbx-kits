@@ -31,20 +31,43 @@ sbx run ./kits/goose . --kit-arg provider=openai --kit-arg model=<model>
 | `provider` | `anthropic` | `GOOSE_PROVIDER` |
 | `model` | `claude-sonnet-5-5` | `GOOSE_MODEL` |
 | `mode` | `auto` | `GOOSE_MODE` (`auto`, `approve`, `smart_approve`, `chat`) |
+| `chatgptAccountId` | empty | `account_id` in the seeded ChatGPT token file (see below) |
 
 `auto` is goose's own default and is deliberate here: the microVM is the permission
 boundary, the same posture the other agent kits take. Use `mode=approve` or
 `smart_approve` if you want goose to ask first as well.
 
+### ChatGPT login instead of an API key
+
+If your org gives you a ChatGPT seat but no API keys, bind the login on the host and use
+goose's `chatgpt_codex` provider:
+
+```sh
+sbx secret set -g openai --oauth
+sbx run ./kits/goose . --kit-arg provider=chatgpt_codex --kit-arg model=gpt-5.5
+```
+
+The real tokens stay with the proxy. When an OAuth login is bound, the install hook writes
+`~/.config/goose/chatgpt_codex/tokens.json` holding only the proxy sentinels, with a
+far-future expiry so goose never tries to refresh. goose sends the sentinel to
+`chatgpt.com/backend-api/codex` and the proxy substitutes the real token. Recreate the
+sandbox after binding or changing the login.
+
+goose normally takes `chatgpt-account-id` from the token claims, which the sandbox can't
+see. If requests are rejected without it, pass the `account_id` from the host's
+`~/.codex/auth.json` with `--kit-arg chatgptAccountId=<id>`.
+
 ## What the kit declares
 
-- **Network (runtime)**: Anthropic, OpenAI, Google Gemini and OpenRouter API hosts, GitHub,
+- **Network (runtime)**: Anthropic, OpenAI (including `auth.openai.com` and `chatgpt.com` for
+  the ChatGPT login), Google Gemini and OpenRouter API hosts, GitHub,
   npm and PyPI (for `npx`/`uvx` MCP extensions), and the template's apt sources.
-- **Credentials**: four optional, proxy-managed API keys. goose reads each from the
+- **Credentials**: four optional, proxy-managed API keys (OpenAI can also be a ChatGPT OAuth login). goose reads each from the
   provider's own env var, which holds a sentinel, and the proxy swaps in the real key.
   Auth shapes follow goose's provider code: Anthropic `x-api-key`, Google `x-goog-api-key`,
   OpenAI and OpenRouter `Bearer`. No GitHub credential is declared.
-- **Lifecycle**: the install hook seeds `~/.config/goose/config.yaml` from the args. The
+- **Lifecycle**: the install hooks seed `~/.config/goose/config.yaml` from the args and, when a
+  ChatGPT OAuth login is bound, the sentinel token file. The
   startup hook registers the sandbox MCP gateway as a `streamable_http` goose extension,
   once, only when `MCP_GATEWAY_URL` is set.
 - **Sessions**: `goose run --text=…` for headless prompts, `goose session --resume` for
@@ -97,5 +120,10 @@ Publish with `--platform linux/amd64,linux/arm64 --push` in one invocation, per 
 - Only the default `anthropic` provider has been exercised here, and only up to goose
   starting and reaching for the API host. Credential injection for the other three
   providers follows goose's source but has not been run end to end.
+- The ChatGPT OAuth path is checked only as far as goose accepting the seeded token file and
+  sending the sentinel bearer to `chatgpt.com`. The proxy's token substitution, and whether
+  the backend needs `chatgptAccountId`, are untested in a live sandbox. A Docker forum thread
+  and `docker/sbx-releases` #160 report OpenAI OAuth failing inside sandboxes; check that
+  before relying on it.
 - There is no `goose-mixin`. The binary is about 300 MB, so adding goose to another
   workload would be a large overlay.
